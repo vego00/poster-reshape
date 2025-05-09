@@ -137,7 +137,7 @@ def process_movie_pair(movie_name, show_visualization=False, save_pairs=False):
     pairs = []
     for v_idx, h_idx in zip(row_ind, col_ind):
         score = float(sim_matrix[v_idx, h_idx])
-        if score >= 0.9:  # 유사도 임계값 적용
+        if score >= 0.89:  # 유사도 임계값 적용
             pairs.append({
                 "vertical": os.path.join(vertical_path, vertical_files[v_idx]),
                 "horizontal": os.path.join(horizontal_path, horizontal_files[h_idx]),
@@ -169,6 +169,10 @@ def main():
 
     # vertical 디렉토리의 모든 영화 폴더를 순회
     for movie_name in sorted(os.listdir(VERTICAL_DIR)):
+        # pairs 폴더가 있는 경우 건너뜀
+        if os.path.exists(os.path.join(OUTPUT_DIR, movie_name)):
+            print(f"⚠️ Skipping {movie_name}: Already processed")
+            continue
         process_movie_pair(movie_name, args.show, args.save)
 
 if __name__ == "__main__":
