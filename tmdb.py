@@ -30,7 +30,7 @@ def download_image(file_path, save_dir, prefix, max_retries=3):
 
 # 1) 인기 영화 40개 수집
 popular_movies = []
-for page in range(2, 3):  # 5페이지까지 수집 (페이지당 20개씩)
+for page in range(2, 6):  # 5페이지까지 수집 (페이지당 20개씩)
     params = {
         "api_key": API_KEY,
         "language": "en-US",
@@ -61,8 +61,8 @@ for movie in popular_movies:
     # 이미지 정보 가져오기
     params = {
         "api_key": API_KEY,
-        "language": "en-US,ko-KR",
-        "include_image_language": "en,ko,null"
+        "language": "en-US",
+        "include_image_language": "en"
     }
     
     try:
