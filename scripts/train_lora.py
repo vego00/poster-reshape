@@ -16,7 +16,7 @@ dataset_repo = "your-username/movie-poster-pairs"
 output_dir = "./models/lora-checkpoints"
 lora_rank = 4
 max_train_steps = 1000
-train_batch_size = 1
+train_batch_size = 2
 image_size = 512
 
 # 가속기 초기화

@@ -23,11 +23,7 @@ pipe = StableDiffusionPipeline.from_pretrained(
 ).to(device)
 
 # LoRA 가중치 로드
-pipe.unet.load_attn_procs(
-    lora_weights_path,
-    use_safetensors=True,
-    local_files_only=True
-)
+pipe.unet.load_attn_procs(lora_weights_path)
 
 # 이미지 리스트 및 메타 정보
 import json
