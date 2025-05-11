@@ -2,3 +2,8 @@
 .env
 data/*
 .vscode/
+.models/lora-checkpoints/*
+.outputs/
+.data/
+.cache/
+.mypy_cache/
