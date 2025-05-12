@@ -103,8 +103,8 @@ def main():
                       help='Base model ID')
     parser.add_argument('--lora_rank', type=int, default=2,  # 랭크 감소
                       help='LoRA rank')
-    parser.add_argument('--max_train_steps', type=int, default=1000,
-                      help='Maximum training steps')
+    parser.add_argument('--num_epochs', type=int, default=10,
+                      help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=1,
                       help='Training batch size (주의: GPU 메모리 사용량에 따라 조절 필요)')
     parser.add_argument('--image_size', type=int, default=224,
@@ -202,71 +202,70 @@ def main():
 
     # 전체 예상 시간 계산
     total_samples = len(dataset)
-    total_batches = min(args.max_train_steps, total_samples // args.batch_size)
+    total_batches = len(train_dataloader) * args.num_epochs
     print(f"\n학습 정보:")
     print(f"- 전체 데이터 수: {total_samples}")
     print(f"- 배치 크기: {args.batch_size}")
     print(f"- 총 배치 수: {total_batches}")
-    print(f"- 총 스텝 수: {args.max_train_steps}")
+    print(f"- 총 에폭 수: {args.num_epochs}")
 
     # AMP 스케일러 설정
     scaler = torch.amp.GradScaler()
 
-    for step, batch in enumerate(tqdm(train_dataloader, total=args.max_train_steps)):
-        if step >= args.max_train_steps:
-            break
-            
-        # 메모리 정리
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            
-        pixel_values = batch["pixel_values"].to(device, dtype=torch.float16)
-        input_ids = batch["prompt_ids"].to(device)
-        target_pixel_values = batch["target_pixel_values"].to(device, dtype=torch.float16)
-        
-        # 텍스트 임베딩 생성
-        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
-            text_embeddings = text_encoder(input_ids)[0]
-        
-        # 노이즈 생성
-        noise = torch.randn_like(pixel_values)
-        timesteps = torch.randint(0, 1000, (pixel_values.shape[0],), device=device).long()
-        
-        # 노이즈가 추가된 이미지
-        noisy_images = pipe.scheduler.add_noise(pixel_values, noise, timesteps)
-        
-        # UNet forward
-        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
-            model_pred = unet(noisy_images, timesteps, text_embeddings).sample
-        
-        # 손실 계산
-        loss = torch.nn.functional.mse_loss(model_pred, noise)
-        
-        # AMP를 사용한 역전파
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad()
-
-        # 100 스텝마다 진행 상황 출력
-        if step % print_interval == 0:
-            current_time = time.time()
-            elapsed_time = current_time - start_time
-            steps_per_second = (step + 1) / elapsed_time
-            remaining_steps = args.max_train_steps - (step + 1)
-            estimated_remaining_time = remaining_steps / steps_per_second
-            
-            print(f"\nStep {step}/{args.max_train_steps} - Loss: {loss.item():.4f}")
-            print(f"  경과 시간: {timedelta(seconds=int(elapsed_time))}")
-            print(f"  스텝/초: {steps_per_second:.2f}")
-            print(f"  예상 남은 시간: {timedelta(seconds=int(estimated_remaining_time))}")
-            print(f"  예상 완료 시간: {timedelta(seconds=int(current_time + estimated_remaining_time))}")
-            print(f"  진행률: {(step + 1) / args.max_train_steps * 100:.1f}%")
-            
-            # 메모리 사용량 출력
+    for epoch in range(args.num_epochs):
+        print(f"\nEpoch {epoch + 1}/{args.num_epochs}")
+        for step, batch in enumerate(tqdm(train_dataloader)):
+            # 메모리 정리
             if torch.cuda.is_available():
-                print(f"  GPU 메모리: {torch.cuda.memory_allocated() / 1024**2:.1f}MB")
-                torch.cuda.empty_cache()  # 메모리 정리
+                torch.cuda.empty_cache()
+            
+            pixel_values = batch["pixel_values"].to(device, dtype=torch.float16)
+            input_ids = batch["prompt_ids"].to(device)
+            target_pixel_values = batch["target_pixel_values"].to(device, dtype=torch.float16)
+            
+            # 텍스트 임베딩 생성
+            with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+                text_embeddings = text_encoder(input_ids)[0]
+            
+            # 노이즈 생성
+            noise = torch.randn_like(pixel_values)
+            timesteps = torch.randint(0, 1000, (pixel_values.shape[0],), device=device).long()
+            
+            # 노이즈가 추가된 이미지
+            noisy_images = pipe.scheduler.add_noise(pixel_values, noise, timesteps)
+            
+            # UNet forward
+            with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+                model_pred = unet(noisy_images, timesteps, text_embeddings).sample
+            
+            # 손실 계산
+            loss = torch.nn.functional.mse_loss(model_pred, noise)
+            
+            # AMP를 사용한 역전파
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
+
+            # 100 스텝마다 진행 상황 출력
+            if step % print_interval == 0:
+                current_time = time.time()
+                elapsed_time = current_time - start_time
+                steps_per_second = (step + 1) / elapsed_time
+                remaining_steps = total_batches - (step + 1)
+                estimated_remaining_time = remaining_steps / steps_per_second
+                
+                print(f"\nStep {step}/{total_batches} - Loss: {loss.item():.4f}")
+                print(f"  경과 시간: {timedelta(seconds=int(elapsed_time))}")
+                print(f"  스텝/초: {steps_per_second:.2f}")
+                print(f"  예상 남은 시간: {timedelta(seconds=int(estimated_remaining_time))}")
+                print(f"  예상 완료 시간: {timedelta(seconds=int(current_time + estimated_remaining_time))}")
+                print(f"  진행률: {(step + 1) / total_batches * 100:.1f}%")
+                
+                # 메모리 사용량 출력
+                if torch.cuda.is_available():
+                    print(f"  GPU 메모리: {torch.cuda.memory_allocated() / 1024**2:.1f}MB")
+                    torch.cuda.empty_cache()  # 메모리 정리
 
     # LoRA 가중치 저장
     os.makedirs(args.output_dir, exist_ok=True)
